@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/msyrus/hello-go/log"
 	"github.com/msyrus/hello-go/service"
-	"github.com/msyrus/hello-go/web/middleware"
 	"github.com/msyrus/hello-go/web/resp"
 )
 
@@ -14,13 +12,8 @@ import (
 func NewRouter(gSvc *service.Greeting) http.Handler {
 	mux := http.NewServeMux()
 
-	generalMdlwrs := middleware.Group(
-		middleware.Recover,
-		middleware.Logger(log.DefaultOutputLogger),
-	)
-
 	gCtl := NewGreetController(gSvc)
-	mux.Handle("/greetings", generalMdlwrs(http.HandlerFunc(gCtl.GreetDefault)))
+	mux.Handle("/greetings", http.HandlerFunc(gCtl.GreetDefault))
 
 	return mux
 }

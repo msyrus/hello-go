@@ -11,25 +11,32 @@ import (
 	"syscall"
 	"time"
 
+	hellolog "github.com/msyrus/hello-go/log"
 	"github.com/msyrus/hello-go/service"
 	"github.com/msyrus/hello-go/web"
+	"github.com/msyrus/hello-go/web/middleware"
 )
 
 var port int
-var host, msg string
+var host, name string
+
+var mdls = middleware.Group(
+	middleware.Recover,
+	middleware.Logger(hellolog.DefaultOutputLogger),
+)
 
 func main() {
 	hName, _ := os.Hostname()
 	flag.StringVar(&host, "host", "", "server host")
 	flag.IntVar(&port, "port", 8080, "server listening port")
-	flag.StringVar(&msg, "name", hName, "server name")
+	flag.StringVar(&name, "name", hName, "server name")
 	flag.Parse()
 
 	if port != 0 {
 		host = fmt.Sprintf("%s:%d", host, port)
 	}
 
-	gSvc, err := service.NewGreeting(msg)
+	gSvc, err := service.NewGreeting(name)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -39,7 +46,7 @@ func main() {
 
 	srvr := http.Server{
 		Addr:    host,
-		Handler: web.NewRouter(gSvc),
+		Handler: mdls(web.NewRouter(gSvc)),
 	}
 
 	go func() {
