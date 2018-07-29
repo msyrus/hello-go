@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package hello;
+
+import "proto/hello/greet.proto";
+
+option go_package = "github.com/msyrus/hello-go/proto/hello";
+
+service Greeting {
+    rpc DefaultGreeting (ReqGreet) returns (Greet);
+}
+
+message ReqGreet {
+    string name = 1;
+}

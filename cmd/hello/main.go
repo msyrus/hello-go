@@ -5,19 +5,24 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
 	hellolog "github.com/msyrus/hello-go/log"
+	pb "github.com/msyrus/hello-go/proto/hello"
+	"github.com/msyrus/hello-go/rpc"
 	"github.com/msyrus/hello-go/service"
 	"github.com/msyrus/hello-go/web"
 	"github.com/msyrus/hello-go/web/middleware"
+	"google.golang.org/grpc"
 )
 
-var port int
+var gPort, wPort int
 var host, name string
 
 var mdls = middleware.Group(
@@ -25,15 +30,22 @@ var mdls = middleware.Group(
 	middleware.Logger(hellolog.DefaultOutputLogger),
 )
 
+var unaryInterceptors = []grpc.UnaryServerInterceptor{}
+
 func main() {
 	hName, _ := os.Hostname()
 	flag.StringVar(&host, "host", "", "server host")
-	flag.IntVar(&port, "port", 8080, "server listening port")
+	flag.IntVar(&wPort, "web", 8080, "web server listening port")
+	flag.IntVar(&gPort, "grpc", 8081, "grpc server listening port")
 	flag.StringVar(&name, "name", hName, "server name")
 	flag.Parse()
 
-	if port != 0 {
-		host = fmt.Sprintf("%s:%d", host, port)
+	var wAddr, gAddr string
+	if wPort != 0 {
+		wAddr = fmt.Sprintf("%s:%d", host, wPort)
+	}
+	if gPort != 0 {
+		gAddr = fmt.Sprintf("%s:%d", host, gPort)
 	}
 
 	gSvc, err := service.NewGreeting(name)
@@ -41,18 +53,32 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	gSrvr := grpc.NewServer(
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+	)
+
+	pb.RegisterGreetingServer(gSrvr, rpc.NewServer(gSvc))
+	lsnr, err := net.Listen("tcp", gAddr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	errCh := make(chan error, 0)
 	sigCh := make(chan os.Signal, 0)
 
+	go func() {
+		log.Println("Starting gRPC server on", gAddr)
+		errCh <- gSrvr.Serve(lsnr)
+	}()
+
 	srvr := http.Server{
-		Addr:    host,
+		Addr:    wAddr,
 		Handler: mdls(web.NewRouter(gSvc)),
 	}
 
 	go func() {
-		log.Println("Starting server on", host)
-		err := srvr.ListenAndServe()
-		errCh <- err
+		log.Println("Starting web server on", wAddr)
+		errCh <- srvr.ListenAndServe()
 	}()
 
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL, syscall.SIGTERM)
@@ -77,16 +103,21 @@ func main() {
 					if err := srvr.Shutdown(ctx); err != nil {
 						log.Fatalln(err)
 					}
+					log.Println("Web Server shutteddown gracefully")
 
-					log.Println("Server shutteddown gracefully")
+					gSrvr.GracefulStop()
+					log.Println("gRPC Server shutteddown gracefully")
 				}()
 				continue
 			}
 
-			log.Println("Suttingdown server forcefully")
+			log.Println("Suttingdown web server forcefully")
 			if err := srvr.Close(); err != nil {
 				log.Fatalln(err)
 			}
+
+			log.Println("Suttingdown gRPC server forcefully")
+			gSrvr.Stop()
 		}
 	}
 }
