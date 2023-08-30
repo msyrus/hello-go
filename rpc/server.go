@@ -15,11 +15,3 @@ func NewServer(svc *service.Greeting) *Server {
 		svc: svc,
 	}
 }
-
-// var unaryInterceptors = []grpc.UnaryServerInterceptor{}
-
-// srvr := grpc.NewServer(
-// 	grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
-// )
-// ptypes.RegisterGreetingsServer(srvr, &Server{})
-// reflection.Register(srvr)

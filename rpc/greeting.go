@@ -3,7 +3,7 @@ package rpc
 import (
 	"context"
 
-	pb "github.com/msyrus/hello-go/proto/hello"
+	pb "github.com/msyrus/hello-go/proto/v1"
 )
 
 // DefaultGreeting returns default greetings msg

@@ -2,19 +2,20 @@
 FROM golang:alpine AS builder
 
 # Add git to determine build git version
-RUN apk add --no-cache --update git
-
-# Set GOPATH to build Go app
-ENV GOPATH=/go
+RUN apk add --no-cache --update git protoc
 
 # Set apps source directory
 ENV SRC_DIR=${GOPATH}/src/github.com/msyrus/hello-go
 
-# Copy apps scource code to the image
-COPY . ${SRC_DIR}
-
 # Define current working directory
 WORKDIR ${SRC_DIR}
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+# Copy apps scource code to the image
+COPY . .
 
 # Build App
 RUN ./build.sh

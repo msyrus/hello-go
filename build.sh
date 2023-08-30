@@ -1,10 +1,6 @@
 #! /bin/sh
 set -e
 
-PROJ="hello-go"
-ORG_PATH="github.com/msyrus"
-REPO_PATH="${ORG_PATH}/${PROJ}"
-
 if ! [ -x "$(command -v go)" ]; then
     echo "go is not installed"
     exit
@@ -18,21 +14,17 @@ if ! [ -x "$(command -v protoc)" ]; then
     exit
 fi
 
-if [ -z "${GOPATH}" ]; then
-    echo "set GOPATH"
-    exit
-fi
+GOBIN="$(go env GOPATH)/bin"
+PATH="${PATH}:${GOBIN}"
 
-PATH="${PATH}:${GOPATH}/bin"
-
-if ! [ -x "$GOPATH/bin/dep" ]; then
-    echo "Installing dep ..."
-    go get -u github.com/golang/dep/cmd/dep
-fi
-
-if ! [ -x "$GOPATH/bin/protoc-gen-go" ]; then
+if ! [ -x "$GOBIN/protoc-gen-go" ]; then
     echo "Installing protoc-gen-go ..."
-    go get -u github.com/golang/protobuf/protoc-gen-go
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.31
+fi
+
+if ! [ -x "$GOBIN/protoc-gen-go-grpc" ]; then
+    echo "Installing protoc-gen-go-grpc ..."
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3
 fi
 
 # Prepare binary version
@@ -50,11 +42,9 @@ if [ -n "$(git diff --shortstat 2> /dev/null | tail -n1)" ]; then
 fi
 
 # Compiling protobuf
-for d in proto/* ; do
-    echo "Compiling $d";
-    protoc --go_out=plugins=grpc:"$GOPATH/src" $d/*.proto
-done
+protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false,paths=source_relative \
+    proto/**/*.proto
 
 # Building go binary
-dep ensure -v -vendor-only
-go install -v -ldflags="-X ${REPO_PATH}/version.Version=${VERSION}" ./cmd/...
+go install -v -ldflags="-X github.com/msyrus/hello-go/version.Version=${VERSION}" ./cmd/...

@@ -12,18 +12,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"google.golang.org/grpc"
+
 	hellolog "github.com/msyrus/hello-go/log"
-	pb "github.com/msyrus/hello-go/proto/hello"
+	pb "github.com/msyrus/hello-go/proto/v1"
 	"github.com/msyrus/hello-go/rpc"
 	"github.com/msyrus/hello-go/service"
+	"github.com/msyrus/hello-go/version"
 	"github.com/msyrus/hello-go/web"
 	"github.com/msyrus/hello-go/web/middleware"
-	"google.golang.org/grpc"
 )
 
-var gPort, wPort int
-var host, name string
+var (
+	gPort, wPort int
+	host, name   string
+	showVersion  bool
+)
 
 var mdls = middleware.Group(
 	middleware.Recover,
@@ -38,7 +43,13 @@ func main() {
 	flag.IntVar(&wPort, "web", 8080, "web server listening port")
 	flag.IntVar(&gPort, "grpc", 8081, "grpc server listening port")
 	flag.StringVar(&name, "name", hName, "server name")
+	flag.BoolVar(&showVersion, "version", false, "print version")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println("Version:", version.Version)
+		return
+	}
 
 	var wAddr, gAddr string
 	if wPort != 0 {
@@ -63,8 +74,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	errCh := make(chan error, 0)
-	sigCh := make(chan os.Signal, 0)
+	errCh := make(chan error, 1)
+	sigCh := make(chan os.Signal, 1)
 
 	go func() {
 		log.Println("Starting gRPC server on", gAddr)
@@ -83,13 +94,14 @@ func main() {
 
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL, syscall.SIGTERM)
 
-	for i := 0; i < 2; i++ {
+	breakIt := false
+	for i := 0; i < 2 && !breakIt; i++ {
 		select {
 		case err := <-errCh:
 			if err != nil {
 				log.Fatalln(err)
 			}
-			break
+			breakIt = true
 
 		case <-sigCh:
 			if i == 0 {
